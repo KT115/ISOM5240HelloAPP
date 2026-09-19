@@ -37,21 +37,34 @@ st.markdown("""
 # ---------------------------------------------------------
 # Model Loaders (Cached with st.cache_resource)
 # ---------------------------------------------------------
-@st.cache_resource(show_spinner="Loading Image Captioning Model...")
-def load_caption_pipeline():
-    """Load BLIP processor and model directly to bypass pipeline task registry."""
-    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
-    return processor, model
-
-
 @st.cache_resource(show_spinner="Loading Story Generation Model...")
 def load_story_pipeline():
-    """Load Flan-T5-base pipeline for controlled narrative generation."""
-    return pipeline(
-        task="text2text-generation",
-        model="google/flan-t5-base"
+    """Load Flan-T5 tokenizer and model directly to bypass pipeline task registry."""
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-base")
+    model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-base")
+    return tokenizer, model
+
+
+def generate_kids_story(caption: str, story_pipe) -> str:
+    """Generate a 50-100 word child-friendly bedtime story based on the caption."""
+    tokenizer, model = story_pipe
+    prompt = (
+        f"Write a cheerful bedtime story for kids aged 3 to 10 years old between 50 and 100 words. "
+        f"The story must be based on this scene: {caption}. "
+        f"Include a positive lesson and a happy ending."
     )
+    
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = model.generate(
+        **inputs,
+        max_length=200,
+        min_length=60,
+        do_sample=True,
+        temperature=0.8,
+        top_p=0.9
+    )
+    story = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return story.strip()
 
 
 # ---------------------------------------------------------
