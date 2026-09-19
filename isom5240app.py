@@ -1,118 +1,189 @@
+import io
 import os
 import streamlit as st
 from PIL import Image
-from transformers import pipeline
 from gtts import gTTS
+from huggingface_hub import InferenceClient
+from transformers import pipeline
 
 # ---------------------------------------------------------
-# 1. Model Loading
+# Page Configuration & Child-Friendly UI Styling
 # ---------------------------------------------------------
-@st.cache_resource
-def load_models():
-    """
-    Loads and caches the Hugging Face pipelines:
-      - Image Captioning: Salesforce/blip-image-captioning-base
-      - Text Generation:  gpt2
-    """
-    # "image-captioning" task is used to avoid KeyError in transformers
-    caption_model = pipeline(
-        "image-captioning",
+st.set_page_config(
+    page_title="Magic Storybook AI",
+    page_icon="🎨",
+    layout="wide"
+)
+
+st.markdown("""
+    <style>
+    .main-title {
+        font-size: 2.4rem;
+        color: #FF5A5F;
+        text-align: center;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+    .sub-title {
+        font-size: 1.1rem;
+        color: #4A4A4A;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------
+# Model Loaders (Cached with st.cache_resource)
+# ---------------------------------------------------------
+@st.cache_resource(show_spinner="Loading Image Captioning Model...")
+def load_caption_pipeline():
+    """Load BLIP Image Captioning pipeline."""
+    return pipeline(
+        task="image-to-text",
         model="Salesforce/blip-image-captioning-base"
     )
-    story_model = pipeline(
-        "text-generation",
-        model="gpt2"
+
+
+@st.cache_resource(show_spinner="Loading Story Generation Model...")
+def load_story_pipeline():
+    """Load Flan-T5-base pipeline for controlled narrative generation."""
+    return pipeline(
+        task="text2text-generation",
+        model="google/flan-t5-base"
     )
-    return caption_model, story_model
 
 
 # ---------------------------------------------------------
-# 2. Pipeline Processing Functions
+# Core Functional Blocks
 # ---------------------------------------------------------
-def get_caption(image, caption_pipe):
-    """
-    Takes a PIL Image object and generates a descriptive text caption.
-    """
-    result = caption_pipe(image)
-    return result[0]["generated_text"]
+def generate_image_caption(image: Image.Image, caption_pipe) -> str:
+    """Extract a brief natural language description from an image."""
+    result = caption_pipe(image, max_new_tokens=50)
+    return result[0]["generated_text"].strip()
 
 
-def get_story(caption, story_pipe):
-    """
-    Expands the image caption into a child-friendly story of 50-100 words.
-    """
-    # Prompt framed for children aged 3-10
-    prompt = f"Once upon a time, there was {caption}. One sunny day,"
-    
-    output = story_pipe(
+def generate_kids_story(caption: str, story_pipe) -> str:
+    """Generate a 50-100 word child-friendly bedtime story based on the caption."""
+    prompt = (
+        f"Write a cheerful bedtime story for kids aged 3 to 10 years old between 50 and 100 words. "
+        f"The story must be based on this scene: {caption}. "
+        f"Include a positive lesson and a happy ending."
+    )
+    story_result = story_pipe(
         prompt,
-        max_new_tokens=80,
-        min_length=50,
+        max_length=200,
+        min_length=60,
         do_sample=True,
         temperature=0.8,
-        repetition_penalty=1.2
+        top_p=0.9
     )
-    
-    raw_story = output[0]["generated_text"]
-    
-    # Trim to the last complete sentence for a clean ending
-    if "." in raw_story:
-        story = raw_story[:raw_story.rfind(".") + 1]
-    else:
-        story = raw_story
-        
-    return story
+    return story_result[0]["generated_text"].strip()
 
 
-def text_to_speech(text, filename="story_audio.mp3"):
+def convert_text_to_audio(text: str) -> io.BytesIO:
+    """Convert story text to speech using gTTS and return an in-memory byte buffer."""
+    audio_buffer = io.BytesIO()
+    tts = gTTS(text=text, lang='en', slow=False)
+    tts.write_to_fp(audio_buffer)
+    audio_buffer.seek(0)
+    return audio_buffer
+
+
+def generate_video_from_text(prompt: str, hf_token: str):
     """
-    Converts text to an MP3 audio file using gTTS (Google Text-to-Speech).
+    Call Hugging Face Serverless Inference API to generate video from text.
+    Preserves low RAM usage on Streamlit Cloud.
     """
-    tts = gTTS(text=text, lang="en")
-    tts.save(filename)
-    return filename
+    client = InferenceClient(provider="hf-inference", api_key=hf_token)
+    video_bytes = client.text_to_video(
+        prompt=prompt,
+        model="damo-vilab/text-to-video-ms-1.7b"
+    )
+    return video_bytes
 
 
 # ---------------------------------------------------------
-# 3. Streamlit User Interface
+# Application Interface & Workflow
 # ---------------------------------------------------------
 def main():
-    st.set_page_config(page_title="Magic Storybook", page_icon="📖", layout="centered")
-    
-    st.title("📖 Magic Storybook for Kids")
-    st.write("Upload a picture to turn it into a bedtime story with audio narration!")
+    st.markdown('<div class="main-title">✨ Magic Storybook AI ✨</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sub-title">Turn any picture into an interactive adventure story with audio and animation!</div>',
+        unsafe_allow_html=True
+    )
 
-    # Load pipelines once
-    caption_pipe, story_pipe = load_models()
+    # Sidebar for API keys and extra configurations
+    with st.sidebar:
+        st.header("⚙️ Settings")
+        hf_token = st.text_input(
+            "Hugging Face Token (Required for Video)",
+            type="password",
+            help="Free token from huggingface.co/settings/tokens to enable Text-to-Video generation."
+        )
+        st.markdown("---")
+        st.info("💡 **Tip**: Models are cached to ensure fast responses without reloading.")
 
-    # Image upload widget
-    uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
+    caption_pipe = load_caption_pipeline()
+    story_pipe = load_story_pipeline()
+
+    # Image upload input
+    uploaded_file = st.file_uploader(
+        "Choose an image (PNG, JPG, JPEG)...",
+        type=["png", "jpg", "jpeg"]
+    )
 
     if uploaded_file is not None:
-        # Display uploaded image
         image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Uploaded Picture", use_container_width=True)
 
-        # Trigger story generation
-        if st.button("✨ Generate Story ✨"):
-            with st.spinner("Analyzing image, writing story, and generating voice..."):
-                # Step A: Image Captioning
-                caption = get_caption(image, caption_pipe)
-                st.info(f"**Image Caption:** {caption.capitalize()}")
+        col_img, col_out = st.columns([1, 1], gap="medium")
 
-                # Step B: Story Generation
-                story = get_story(caption, story_pipe)
-                st.subheader("Your Story:")
-                st.write(story)
+        with col_img:
+            st.subheader("📸 Your Image")
+            st.image(image, use_container_width=True)
 
-                # Step C: Text-to-Speech Conversion
-                audio_path = text_to_speech(story)
-                st.subheader("🔊 Listen Along:")
-                st.audio(audio_path, format="audio/mp3")
+        with col_out:
+            st.subheader("📖 Story & Narration")
 
-                # Clean up local audio file after Streamlit serves it
-                if os.path.exists(audio_path):
-                    os.remove(audio_path)
+            with st.spinner("Analyzing image..."):
+                caption = generate_image_caption(image, caption_pipe)
+
+            st.markdown(f"**Scene Description:** *{caption.capitalize()}*")
+
+            with st.spinner("Weaving a story for ages 3-10..."):
+                story = generate_kids_story(caption, story_pipe)
+
+            st.success("Story ready!")
+            st.write(story)
+
+            # Word count verification indicator
+            word_count = len(story.split())
+            st.caption(f"📏 Length: {word_count} words (Target: 50–100 words)")
+
+            # Audio Player
+            st.markdown("### 🎧 Listen to Story")
+            with st.spinner("Generating audio narration..."):
+                audio_stream = convert_text_to_audio(story)
+                st.audio(audio_stream, format="audio/mp3")
+
+        # Text-to-Video Section
+        st.markdown("---")
+        st.subheader("🎬 Magic Video Animation")
+        st.write("Generate a mini-clip based on your story scene.")
+
+        if st.button("Generate Video Clip"):
+            if not hf_token:
+                st.warning("Please provide a Hugging Face API Token in the sidebar to run Text-to-Video.")
+            else:
+                with st.spinner("Generating video via Hugging Face Serverless API (this may take 30-60s)..."):
+                    try:
+                        # Extract first 25 words for a concise video prompt
+                        video_prompt = f"cartoon style, {caption}, cinematic 3d render"
+                        video_bytes = generate_video_from_text(video_prompt, hf_token)
+                        st.video(video_bytes)
+                    except Exception as e:
+                        st.error(f"Video generation failed: {e}")
 
 
 if __name__ == "__main__":
