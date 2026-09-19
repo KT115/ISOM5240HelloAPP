@@ -12,7 +12,7 @@ from transformers import pipeline
 st.set_page_config(page_title="Deep Learning Sentiment Analysis App", page_icon="💩", layout="centered")
 
 st.title("💩 Sentiment Analysis Tool💩")
-st.write("比卡超見記者")
+st.write("Enter text to analyze")
 
 # Cache the pipeline so the model loads only once
 @st.cache_resource
@@ -23,7 +23,7 @@ with st.spinner("Loading model..."):
     sentiment_pipeline = load_sentiment_model()
 
 # Text input area with the default text from your notebook
-default_text = "Deep Learning (DL) represents a highly promising approach to developing applications in Artificial Intelligence (AI)."
+default_text = "比卡超見記者"
 user_input = st.text_area("Input Text:", value=default_text, height=150)
 
 if st.button("Analyze Sentiment", type="primary"):
