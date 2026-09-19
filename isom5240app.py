@@ -1,44 +1,54 @@
-#import part
+# import part
 import streamlit as st
 from transformers import pipeline
 
-#function part
 
-
-#main part
-
-
-# Setup page configuration
-st.set_page_config(page_title="Deep Learning Sentiment Analysis App", page_icon="💩", layout="centered")
-
-st.title("💩 Sentiment Analysis Tool💩")
-st.write("Enter text to analyze")
-
-# Cache the pipeline so the model loads only once
+# function part
 @st.cache_resource
 def load_sentiment_model():
-    return pipeline("sentiment-analysis")
+    # Explicitly defining the default model used in your Colab environment
+    model_name = "distilbert/distilbert-base-uncased-finetuned-sst-2-english"
+    return pipeline("sentiment-analysis", model=model_name)
 
-with st.spinner("Loading model..."):
-    sentiment_pipeline = load_sentiment_model()
+def analyze_text(sentiment_pipeline, text):
+    # Process the text and extract label and score
+    result = sentiment_pipeline(text)
+    label = result[0]["label"]
+    score = result[0]["score"]
+    return label, score
 
-# Text input area with the default text from your notebook
-default_text = "比卡超見記者"
-user_input = st.text_area("Input Text:", value=default_text, height=150)
+def main():
+    # Setup page configuration
+    st.set_page_config(page_title="Deep Learning Sentiment Analysis App", page_icon="💩", layout="centered")
 
-if st.button("Analyze Sentiment", type="primary"):
-    if user_input.strip():
-        with st.spinner("Analyzing..."):
-            result = sentiment_pipeline(user_input)
-            label = result[0]["label"]
-            score = result[0]["score"]
+    st.title("💩 Sentiment Analysis Tool 💩")
+    st.write("Enter text to analyze")
 
-        st.subheader("Result")
-        if label.upper() == "POSITIVE":
-            st.success(f"**Sentiment:** {label}")
+    # Load the model
+    with st.spinner("Loading model..."):
+        sentiment_pipeline = load_sentiment_model()
+
+    # Text input area with the default text
+    default_text = "比卡超見記者"
+    user_input = st.text_area("Input Text:", value=default_text, height=150)
+
+    # Trigger analysis on button click
+    if st.button("Analyze Sentiment", type="primary"):
+        if user_input.strip():
+            with st.spinner("Analyzing..."):
+                label, score = analyze_text(sentiment_pipeline, user_input)
+
+            st.subheader("Result")
+            if label.upper() == "POSITIVE":
+                st.success(f"**Sentiment:** {label}")
+            else:
+                st.error(f"**Sentiment:** {label}")
+
+            st.metric(label="Confidence Score", value=f"{score:.4f}")
         else:
-            st.error(f"**Sentiment:** {label}")
+            st.warning("Please enter some text to analyze.")
 
-        st.metric(label="Confidence Score", value=f"{score:.4f}")
-    else:
-        st.warning("Please enter some text to analyze.")
+
+# main part
+if __name__ == "__main__":
+    main()
