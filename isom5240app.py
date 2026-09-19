@@ -52,7 +52,6 @@ def generate_image_caption(image: Image.Image, caption_pipe) -> str:
     out = model.generate(**inputs, max_new_tokens=50)
     caption = processor.decode(out[0], skip_special_tokens=True)
     return caption.strip()
-    )
 
 
 # ---------------------------------------------------------
