@@ -1,32 +1,37 @@
 import streamlit as st
 from transformers import pipeline
 
-# Load the text classification model pipeline
-classifier = pipeline("text-classification",
-                      model='distilbert/distilbert-base-uncased-finetuned-sst-2-english',
-                      return_all_scores=True)
+# Configure page settings
+st.set_page_config(page_title="Sentiment Analysis App", page_icon="💬", layout="centered")
 
-# Streamlit application title
-st.title("Text Classification for you")
-st.write("Classification for 6 emotions: sadness, joy, love, anger, fear, surprise")
+st.title("💬 Sentiment Analysis Tool")
+st.write("Enter text below to analyze its sentiment using Hugging Face Transformers.")
 
-# Text input for user to enter the text to classify
-text = st.text_area("Enter the text to classify", "")
+# Cache the pipeline so the model loads only once
+@st.cache_resource
+def load_sentiment_model():
+    return pipeline("sentiment-analysis")
 
-# Perform text classification when the user clicks the "Classify" button
-if st.button("Classify"):
-    # Perform text classification on the input text
-    results = classifier(text)[0]
+with st.spinner("Loading model..."):
+    sentiment_pipeline = load_sentiment_model()
 
-    # Display the classification result
-    max_score = float('-inf')
-    max_label = ''
+# Text input area with the default text from your notebook
+default_text = "Deep Learning (DL) represents a highly promising approach to developing applications in Artificial Intelligence (AI)."
+user_input = st.text_area("Input Text:", value=default_text, height=150)
 
-    for result in results:
-        if result['score'] > max_score:
-            max_score = result['score']
-            max_label = result['label']
+if st.button("Analyze Sentiment", type="primary"):
+    if user_input.strip():
+        with st.spinner("Analyzing..."):
+            result = sentiment_pipeline(user_input)
+            label = result[0]["label"]
+            score = result[0]["score"]
 
-    st.write("Text:", text)
-    st.write("Label:", max_label)
-    st.write("Score:", max_score)
+        st.subheader("Result")
+        if label.upper() == "POSITIVE":
+            st.success(f"**Sentiment:** {label}")
+        else:
+            st.error(f"**Sentiment:** {label}")
+
+        st.metric(label="Confidence Score", value=f"{score:.4f}")
+    else:
+        st.warning("Please enter some text to analyze.")
