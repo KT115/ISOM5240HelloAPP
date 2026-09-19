@@ -11,7 +11,7 @@ from transformers import pipeline
 # Setup page configuration
 st.set_page_config(page_title="Deep Learning Sentiment Analysis App", page_icon="💬", layout="centered")
 
-st.title("💬 Sentiment Analysis Tool")
+st.title("💩 Sentiment Analysis Tool💩")
 st.write("Enter text below to analyze its sentiment using Hugging Face Transformers.")
 
 # Cache the pipeline so the model loads only once
