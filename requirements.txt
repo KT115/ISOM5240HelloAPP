@@ -1,7 +1,6 @@
-streamlit
-transformers
-torch
-Pillow
-gTTS
-timm
-accelerate
+streamlit>=1.35.0
+torch>=2.2.0 --extra-index-url https://download.pytorch.org/whl/cpu
+transformers>=4.40.0
+pillow>=10.0.0
+gTTS>=2.5.0
+huggingface_hub>=0.23.0
