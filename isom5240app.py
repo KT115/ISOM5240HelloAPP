@@ -39,12 +39,24 @@ st.markdown("""
 # ---------------------------------------------------------
 @st.cache_resource(show_spinner="Loading Image Captioning Model...")
 def load_caption_pipeline():
-    """Load BLIP processor and model directly."""
+    """Load BLIP processor and model directly to bypass pipeline task registry."""
     processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
     model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
     return processor, model
 
 
+@st.cache_resource(show_spinner="Loading Story Generation Model...")
+def load_story_pipeline():
+    """Load Flan-T5-base pipeline for controlled narrative generation."""
+    return pipeline(
+        task="text2text-generation",
+        model="google/flan-t5-base"
+    )
+
+
+# ---------------------------------------------------------
+# Core Functional Blocks
+# ---------------------------------------------------------
 def generate_image_caption(image: Image.Image, caption_pipe) -> str:
     """Generate image caption using BLIP processor and model."""
     processor, model = caption_pipe
@@ -52,15 +64,6 @@ def generate_image_caption(image: Image.Image, caption_pipe) -> str:
     out = model.generate(**inputs, max_new_tokens=50)
     caption = processor.decode(out[0], skip_special_tokens=True)
     return caption.strip()
-
-
-# ---------------------------------------------------------
-# Core Functional Blocks
-# ---------------------------------------------------------
-def generate_image_caption(image: Image.Image, caption_pipe) -> str:
-    """Extract a brief natural language description from an image."""
-    result = caption_pipe(image, max_new_tokens=50)
-    return result[0]["generated_text"].strip()
 
 
 def generate_kids_story(caption: str, story_pipe) -> str:
@@ -91,10 +94,7 @@ def convert_text_to_audio(text: str) -> io.BytesIO:
 
 
 def generate_video_from_text(prompt: str, hf_token: str):
-    """
-    Call Hugging Face Serverless Inference API to generate video from text.
-    Preserves low RAM usage on Streamlit Cloud.
-    """
+    """Call Hugging Face Serverless Inference API to generate video from text."""
     client = InferenceClient(provider="hf-inference", api_key=hf_token)
     video_bytes = client.text_to_video(
         prompt=prompt,
@@ -113,7 +113,6 @@ def main():
         unsafe_allow_html=True
     )
 
-    # Sidebar for API keys and extra configurations
     with st.sidebar:
         st.header("⚙️ Settings")
         hf_token = st.text_input(
@@ -124,10 +123,10 @@ def main():
         st.markdown("---")
         st.info("💡 **Tip**: Models are cached to ensure fast responses without reloading.")
 
+    # Load both models
     caption_pipe = load_caption_pipeline()
     story_pipe = load_story_pipeline()
 
-    # Image upload input
     uploaded_file = st.file_uploader(
         "Choose an image (PNG, JPG, JPEG)...",
         type=["png", "jpg", "jpeg"]
@@ -156,17 +155,14 @@ def main():
             st.success("Story ready!")
             st.write(story)
 
-            # Word count verification indicator
             word_count = len(story.split())
             st.caption(f"📏 Length: {word_count} words (Target: 50–100 words)")
 
-            # Audio Player
             st.markdown("### 🎧 Listen to Story")
             with st.spinner("Generating audio narration..."):
                 audio_stream = convert_text_to_audio(story)
                 st.audio(audio_stream, format="audio/mp3")
 
-        # Text-to-Video Section
         st.markdown("---")
         st.subheader("🎬 Magic Video Animation")
         st.write("Generate a mini-clip based on your story scene.")
@@ -177,7 +173,6 @@ def main():
             else:
                 with st.spinner("Generating video via Hugging Face Serverless API (this may take 30-60s)..."):
                     try:
-                        # Extract first 25 words for a concise video prompt
                         video_prompt = f"cartoon style, {caption}, cinematic 3d render"
                         video_bytes = generate_video_from_text(video_prompt, hf_token)
                         st.video(video_bytes)
