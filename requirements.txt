@@ -1,6 +1,7 @@
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSeq2SeqLM,
-    BlipProcessor,
-    BlipForConditionalGeneration
-)
+streamlit>=1.35.0
+torch
+torchvision
+transformers>=4.40.0
+pillow>=10.0.0
+gTTS>=2.5.0
+huggingface_hub>=0.23.0
