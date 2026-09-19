@@ -4,7 +4,7 @@ import streamlit as st
 from PIL import Image
 from gtts import gTTS
 from huggingface_hub import InferenceClient
-from transformers import pipeline
+from transformers import pipeline, BlipProcessor, BlipForConditionalGeneration
 
 # ---------------------------------------------------------
 # Page Configuration & Child-Friendly UI Styling
@@ -39,19 +39,19 @@ st.markdown("""
 # ---------------------------------------------------------
 @st.cache_resource(show_spinner="Loading Image Captioning Model...")
 def load_caption_pipeline():
-    """Load BLIP Image Captioning pipeline."""
-    return pipeline(
-        task="image-to-text",
-        model="Salesforce/blip-image-captioning-base"
-    )
+    """Load BLIP processor and model directly."""
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+    return processor, model
 
 
-@st.cache_resource(show_spinner="Loading Story Generation Model...")
-def load_story_pipeline():
-    """Load Flan-T5-base pipeline for controlled narrative generation."""
-    return pipeline(
-        task="text2text-generation",
-        model="google/flan-t5-base"
+def generate_image_caption(image: Image.Image, caption_pipe) -> str:
+    """Generate image caption using BLIP processor and model."""
+    processor, model = caption_pipe
+    inputs = processor(images=image, return_tensors="pt")
+    out = model.generate(**inputs, max_new_tokens=50)
+    caption = processor.decode(out[0], skip_special_tokens=True)
+    return caption.strip()
     )
 
 
